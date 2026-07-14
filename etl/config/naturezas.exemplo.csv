@@ -1,0 +1,9 @@
+empresa,nat_operacao,cfop,tipo
+# Preencher a partir da query 5 do discovery.sql (com apoio do fiscal).
+# tipo = venda | devolucao | bonificacao | ignorar
+# Exemplos ilustrativos (ajustar aos códigos reais da Fugini):
+fugini,5102,5102,venda
+fugini,6102,6102,venda
+fugini,5910,5910,bonificacao
+fugini,1202,1202,devolucao
+fugini,5152,5152,ignorar
