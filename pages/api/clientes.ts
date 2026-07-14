@@ -2,19 +2,16 @@
 // GET   /api/clientes?status=ativo&canal=varejo&busca=merc  (vendedor vê só a própria carteira)
 // POST  /api/clientes  — cadastra novo cliente (origem 'crm')
 // PATCH /api/clientes?cod_cliente=X — atualiza status/canal/limite (só master)
-// Auth: Bearer token obrigatório (banco do CRM).
-// Dados: a tabela clientes vive no banco analítico (db_FIC_Painel).
+// Auth: Bearer token obrigatório. Banco único: db_FIC_Painel.
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { requireVendedor, supabaseAdmin } from '@/lib/authApi'
-import { supabasePainel } from '@/lib/painelDb'
 
 const CANAIS = ['varejo', 'atacado', 'food service', 'distribuidor', 'outro']
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const crm = supabaseAdmin()
-  const vendedor = await requireVendedor(req, res, crm)
+  const admin = supabaseAdmin()
+  const vendedor = await requireVendedor(req, res, admin)
   if (!vendedor) return
-  const admin = supabasePainel()
 
   // GET — lista carteira
   if (req.method === 'GET') {
