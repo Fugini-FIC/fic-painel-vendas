@@ -49,6 +49,12 @@ interface DashData {
   por_dia: { dia: string; faturamento: number; caixas: number }[]
   por_campanha: { nome: string; data_inicio: string; data_fim: string; faturamento: number; caixas: number }[]
   visitas: { checkins: number; realizadas: number; agendadas: number; pendentes: number }
+  pedidos: {
+    carteira_aberta: { valor: number; caixas: number; pedidos: number; itens: number }
+    fill_rate: { caixas_faturadas: number; caixas_cortadas: number; valor_cortado: number; pct: number | null }
+    corte_por_motivo: { motivo: string; caixas: number; valor: number }[]
+    carteira_por_vendedor: { cod_vendedor: string; nome: string; valor: number; caixas: number; pedidos: number }[]
+  } | null
   metas: {
     cod_vendedor: string; nome: string; fase: number
     meta_visitas: number; meta_positivados: number; meta_cadastros: number
@@ -356,6 +362,41 @@ export default function Dash() {
                   ))}
                 </div>
               </div>
+
+              {/* ===== Pedidos / Carteira em aberto (Fase 2b) ===== */}
+              {dados.pedidos && (
+                <>
+                  <Secao titulo="📦 Pedidos e carteira" />
+                  <div style={{ fontSize: 11, color: '#898781', marginBottom: 8 }}>
+                    Carteira em aberto = snapshot atual (receita no forno). Fill rate e corte = do período.
+                  </div>
+                  <div style={gridTiles}>
+                    <Tile label="Carteira em aberto" valor={fmtBRL.format(dados.pedidos.carteira_aberta.valor)} cor={COR.faturamento}
+                      sub={`${fmtNum.format(dados.pedidos.carteira_aberta.pedidos)} pedidos · ${fmtNum.format(dados.pedidos.carteira_aberta.caixas)} cxs`} />
+                    {dados.pedidos.fill_rate.pct !== null && (
+                      <Tile label="Fill rate (atendimento)" valor={`${fmtDec.format(dados.pedidos.fill_rate.pct)}%`}
+                        cor={dados.pedidos.fill_rate.pct >= 95 ? STATUS.good : dados.pedidos.fill_rate.pct >= 85 ? STATUS.warning : STATUS.critical}
+                        sub="caixas faturadas / pedidas" />
+                    )}
+                    {dados.pedidos.fill_rate.caixas_cortadas > 0 && (
+                      <Tile label="Caixas cortadas" valor={fmtNum.format(dados.pedidos.fill_rate.caixas_cortadas)} cor={STATUS.critical}
+                        sub={`${fmtBRL.format(dados.pedidos.fill_rate.valor_cortado)} não entregue`} />
+                    )}
+                  </div>
+                  {dados.pedidos.corte_por_motivo.length > 0 && (
+                    <div style={cardStyle}>
+                      <TituloCard t="Corte por motivo (caixas não entregues)" />
+                      {dados.pedidos.corte_por_motivo.slice(0, 8).map((m, i) => (
+                        <Barra key={m.motivo} rotulo={m.motivo}
+                          valor={fmtNum.format(m.caixas)}
+                          detalhe={fmtBRL.format(m.valor)}
+                          pct={Math.round(100 * m.caixas / Math.max(1, ...dados.pedidos!.corte_por_motivo.map(x => x.caixas)))}
+                          cor={COR_CANAL[i % COR_CANAL.length]} />
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
 
               {/* ===== Visitas ===== */}
               <Secao titulo="📍 Visitas e check-ins" />

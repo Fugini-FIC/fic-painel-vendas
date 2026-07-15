@@ -100,6 +100,32 @@ create table if not exists mart.vendedores (
   primary key (empresa, cod_vendedor)
 );
 
+-- Fase 2b: pedidos (grão item). status_grupo classifica o item do pedido:
+--   aberto = "Carteira" (backlog/receita futura)
+--   faturado = virou NF
+--   corte = não entregue (QUALI/COML/LOG/DIR...); motivo_corte = categoria
+create table if not exists mart.pedidos (
+  empresa      text not null,
+  nr_pedido    text not null,
+  it_codigo    text not null,
+  cod_cliente  text not null,
+  cod_vendedor text,
+  qt_caixas    numeric(14,2) default 0,
+  valor        numeric(14,2) default 0,
+  tipo         text default 'venda',        -- venda | devolucao (Dev)
+  status_item  text,
+  status_grupo text,                          -- aberto | faturado | corte
+  motivo_corte text,                          -- QUALI | COML | LOG | DIR | ...
+  familia      text,
+  data_pedido  date,
+  campanha     text,
+  carregado_em timestamptz not null default now(),
+  primary key (empresa, nr_pedido, it_codigo, cod_cliente)
+);
+create index if not exists idx_mart_ped_data   on mart.pedidos(data_pedido);
+create index if not exists idx_mart_ped_status on mart.pedidos(status_grupo);
+create index if not exists idx_mart_ped_vend   on mart.pedidos(cod_vendedor);
+
 create table if not exists mart.produtos (
   empresa   text not null,
   it_codigo text not null,

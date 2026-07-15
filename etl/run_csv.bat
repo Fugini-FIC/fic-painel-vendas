@@ -12,8 +12,9 @@ python -m extract.extract_csv --entidade cliente || goto erro
 python -m extract.extract_csv --entidade nf      || goto erro
 python -m extract.extract_csv --entidade pedido  || goto erro
 
-echo [%date% %time%] Montando mart (produtos, clientes, vendas)...
-python -m common.run_sql sql\070_mart_csv.sql || goto erro
+echo [%date% %time%] Montando mart (produtos, clientes, vendas, pedidos)...
+python -m common.run_sql sql\070_mart_csv.sql     || goto erro
+python -m common.run_sql sql\075_mart_pedidos.sql || goto erro
 
 echo [%date% %time%] Publicando no Supabase...
 python -m publish.sync_painel_supabase --full || goto erro

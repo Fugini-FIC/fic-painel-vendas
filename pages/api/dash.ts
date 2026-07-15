@@ -38,8 +38,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   proximoDia.setUTCDate(proximoDia.getUTCDate() + 1)
   const fimExclusivo = proximoDia.toISOString().slice(0, 10)
 
-  const [vendasRes, vendRes, chkRes, agRes, metasRes] = await Promise.all([
+  const [vendasRes, pedidosRes, vendRes, chkRes, agRes, metasRes] = await Promise.all([
     admin.rpc('painel_vendas', { p_inicio: inicio, p_fim: fim, p_vendedor: filtroVendedor }),
+    admin.rpc('painel_pedidos', { p_inicio: inicio, p_fim: fim, p_vendedor: filtroVendedor }),
     admin.from('vendedores').select('cod_vendedor, nome'),
     admin.from('checkins')
       .select('cod_vendedor, status_visita')
@@ -100,6 +101,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const comNome = <T extends { cod_vendedor: string }>(lista: T[]) =>
     lista.map(item => ({ ...item, nome: nomes.get(item.cod_vendedor) || item.cod_vendedor }))
 
+  // Pedidos (Fase 2b): carteira em aberto, fill rate, corte. Nomes nos rankings.
+  const pedidos = pedidosRes.error ? null : {
+    ...pedidosRes.data,
+    carteira_por_vendedor: comNome((pedidosRes.data?.carteira_por_vendedor || [])),
+  }
+
   return res.status(200).json({
     role: vendedor.role,
     filtro_vendedor: filtroVendedor,
@@ -110,5 +117,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     })),
     visitas,
     metas,
+    pedidos,
   })
 }

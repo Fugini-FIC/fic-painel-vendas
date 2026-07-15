@@ -75,6 +75,19 @@ def sincronizar(full: bool) -> None:
             vendedores = [{"cod_vendedor": r[0], "nome": r[1], "role": "vendedor"} for r in c.fetchall()]
             _push("vendedores", "cod_vendedor", vendedores)
 
+            # pedidos (carteira em aberto / fill rate) — Fase 2b
+            c.execute(
+                "select nr_pedido, it_codigo, cod_cliente, cod_vendedor, qt_caixas, valor, "
+                "tipo, status_grupo, motivo_corte, familia, data_pedido, campanha "
+                "from mart.pedidos where empresa='fugini'")
+            pedidos = [{
+                "nr_pedido": r[0], "it_codigo": r[1], "cod_cliente": r[2], "cod_vendedor": r[3],
+                "qt_caixas": float(r[4] or 0), "valor": float(r[5] or 0), "tipo": r[6],
+                "status_grupo": r[7], "motivo_corte": r[8], "familia": r[9],
+                "data_pedido": str(r[10]) if r[10] else None, "campanha": r[11],
+            } for r in c.fetchall()]
+            _push("pedidos", "nr_pedido,it_codigo,cod_cliente", pedidos)
+
             # vendas (janela por data_emissao)
             c.execute(
                 "select nr_nota, nr_pedido, cod_cliente, cod_vendedor, it_codigo, "
@@ -88,7 +101,8 @@ def sincronizar(full: bool) -> None:
             _push("vendas", "nr_nota,it_codigo,cod_cliente", vendas)
             total = len(vendas)
 
-        msg = f"{len(prod)} produtos, {len(clientes)} clientes, {len(vendedores)} vendedores, {total} vendas (corte {corte})"
+        msg = (f"{len(prod)} produtos, {len(clientes)} clientes, {len(vendedores)} vendedores, "
+               f"{len(pedidos)} pedidos, {total} vendas (corte {corte})")
         log_fim(dw, log_id, "OK", total, msg)
         print(f"[publish] {msg}")
     except Exception as e:
