@@ -12,6 +12,7 @@ CSV_ENTIDADES = {
     "nf": {
         "arquivo": "totvs_itensnotafiscal.csv",
         "raw_table": "raw_csv.nf",
+        "filtro_data": "data_emissao",   # corta histórico anterior a CSV_DESDE
         "colunas": [
             ("cod-item",       "it_codigo",    "text"),
             ("nr-nota-fiscal", "nr_nota",      "text"),
@@ -52,6 +53,7 @@ CSV_ENTIDADES = {
     "pedido": {
         "arquivo": "totvs_itenspedido.csv",
         "raw_table": "raw_csv.pedido",
+        "filtro_data": "data_pedido",    # corta histórico anterior a CSV_DESDE
         "colunas": [
             ("cod-item",           "it_codigo",   "text"),
             ("nr-pedido",          "nr_pedido",   "text"),

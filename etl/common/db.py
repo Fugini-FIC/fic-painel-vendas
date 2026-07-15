@@ -1,8 +1,14 @@
-# common/db.py — conexões com Progress (JDBC) e com o dw_fugini (Postgres)
+# common/db.py — conexões com o dw_fugini (Postgres) e, opcionalmente, Progress (JDBC)
 import os
-import jaydebeapi
 import psycopg2
 from dotenv import load_dotenv
+
+# jaydebeapi só é necessário no Caminho B (leitura direta do Progress).
+# No Caminho A (CSV) não precisa de Java/JDBC — import opcional.
+try:
+    import jaydebeapi
+except ImportError:  # pragma: no cover
+    jaydebeapi = None
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", "config", ".env"))
 
@@ -15,6 +21,11 @@ def conectar_progress(dbname: str):
     onerar a fábrica. Aceita ler dado ainda não commitado (a janela móvel +
     reconciliação corrigem isso). Também marca a conexão read-only.
     """
+    if jaydebeapi is None:
+        raise RuntimeError(
+            "jaydebeapi não instalado. O Caminho A (CSV) não precisa dele. "
+            "Para o Caminho B (JDBC): pip install jaydebeapi JPype1 (requer Java)."
+        )
     host = os.environ["PROGRESS_HOST"]
     port = os.environ["PROGRESS_PORT"]
     url = f"jdbc:datadirect:openedge://{host}:{port};databaseName={dbname}"

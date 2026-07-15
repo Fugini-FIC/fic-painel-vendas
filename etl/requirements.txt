@@ -1,4 +1,7 @@
-jaydebeapi>=1.2.3
-JPype1>=1.5.0
+# Caminho A (CSV) — é só isto que o run_csv.bat precisa. Não exige Java.
 psycopg2-binary>=2.9
 python-dotenv>=1.0
+
+# Caminho B (leitura direta do Progress via JDBC) — OPCIONAL, exige Java.
+# Instale só se for usar run_full.bat / run_incremental.bat:
+#   pip install jaydebeapi JPype1
