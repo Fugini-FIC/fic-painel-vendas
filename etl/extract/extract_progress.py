@@ -1,11 +1,17 @@
 # extract/extract_progress.py — extrai uma entidade de uma base Progress p/ raw.*
 #
-# Entidades registradas em entities.py. Fato (it_nota_fisc) = incremental por
-# janela móvel (dt_emis_nota); dimensões (natur_oper) = full. Idempotente.
+# PROTEÇÃO DA PRODUÇÃO (ems2fugini é ERP crítico):
+#  - conexão em DIRTY READ (common/db.py) → nunca pega lock do ERP;
+#  - fato (it_nota_fisc) filtra por data no CABEÇALHO indexado (nota-fiscal) via
+#    join → sem full scan;
+#  - carga cheia quebrada em CHUNKS por ano (transação curta, retomável), a
+#    partir de PROGRESS_HIST_ANO_INI (default: ano atual - 2);
+#  - fetchmany em vez de fetchall → cursor não fica aberto puxando tudo.
+#  Rodar a carga cheia em janela de baixa carga (madrugada/fim de semana).
 #
 # Uso:
 #   python -m extract.extract_progress --empresa fugini --base ems2fugini --entidade it_nota_fisc
-#   python -m extract.extract_progress --empresa fugini --base ems2fugini --entidade natur_oper
+#   python -m extract.extract_progress --empresa fugini --base ems2mult   --entidade repres
 #   ... --entidade it_nota_fisc --full
 import os
 import sys
@@ -18,6 +24,7 @@ from common.log import log_inicio, log_fim
 from extract.entities import ENTIDADES
 
 SQL_DIR = os.path.join(os.path.dirname(__file__), "..", "sql", "extract")
+FETCH = 5000
 
 
 def _conv(valor, coluna, cfg):
@@ -37,51 +44,83 @@ def _conv(valor, coluna, cfg):
     return valor
 
 
+def _sql(nome: str) -> str:
+    return open(os.path.join(SQL_DIR, nome), encoding="utf-8").read()
+
+
+def _copiar(prog, dw, cfg, empresa: str, sql: str) -> int:
+    """Executa o SELECT no Progress e insere na raw em lotes (fetchmany)."""
+    colunas = cfg["colunas"]
+    cols_sql = ",".join(["empresa"] + colunas)
+    ph = ",".join(["%s"] * (len(colunas) + 1))
+    insert = f"insert into {cfg['raw_table']} ({cols_sql}) values ({ph}) on conflict do nothing"
+
+    cur = prog.cursor()
+    try:
+        cur.arraysize = FETCH
+    except Exception:
+        pass
+    cur.execute(sql)
+    desc = [c[0].lower() for c in cur.description]
+    total = 0
+    with dw.cursor() as dcur:
+        while True:
+            rows = cur.fetchmany(FETCH)
+            if not rows:
+                break
+            lote = []
+            for row in rows:
+                d = dict(zip(desc, row))
+                lote.append(tuple([empresa] + [_conv(d.get(c), c, cfg) for c in colunas]))
+            dcur.executemany(insert, lote)
+            total += len(lote)
+    return total
+
+
 def extrair(empresa: str, base: str, entidade: str, full: bool) -> None:
     cfg = ENTIDADES[entidade]
     dw = conectar_dw()
     log_id = log_inicio(dw, f"extract:{base}:{entidade}")
     total = 0
     try:
-        sql = open(os.path.join(SQL_DIR, cfg["sql"]), encoding="utf-8").read()
-        if cfg["incremental"]:
-            if full:
-                corte = "2000-01-01"
-            else:
-                dias = int(os.environ.get("JANELA_DIAS", "7"))
-                corte = (datetime.now(timezone.utc) - timedelta(days=dias)).strftime("%Y-%m-%d")
-            sql = sql.replace(":CORTE", "{d '" + corte + "'}")
-
         prog = conectar_progress(base)
         try:
-            cur = prog.cursor()
-            cur.execute(sql)
-            desc_cols = [c[0].lower() for c in cur.description]
-            colunas = cfg["colunas"]
-            with dw.cursor() as dcur:
-                # Limpa antes de reinserir (janela p/ incremental; tudo p/ full)
-                if cfg["incremental"]:
-                    dcur.execute(
-                        f"delete from {cfg['raw_table']} where empresa=%s and dt_emis_nota>=%s",
-                        (empresa, corte),
-                    )
-                else:
+            if not cfg["incremental"]:
+                # Dimensão: carga full simples (tabela pequena, sem data)
+                with dw.cursor() as dcur:
                     dcur.execute(f"delete from {cfg['raw_table']} where empresa=%s", (empresa,))
-
-                cols_sql = ",".join(["empresa"] + colunas)
-                ph = ",".join(["%s"] * (len(colunas) + 1))
-                insert = f"insert into {cfg['raw_table']} ({cols_sql}) values ({ph}) on conflict do nothing"
-
-                lote = []
-                for row in cur.fetchall():
-                    d = dict(zip(desc_cols, row))
-                    linha = [empresa] + [_conv(d.get(c), c, cfg) for c in colunas]
-                    lote.append(tuple(linha))
-                    if len(lote) >= 5000:
-                        dcur.executemany(insert, lote); total += len(lote); lote = []
-                if lote:
-                    dcur.executemany(insert, lote); total += len(lote)
-            dw.commit()
+                total = _copiar(prog, dw, cfg, empresa, _sql(cfg["sql"]))
+                dw.commit()
+            elif full:
+                # Fato — carga cheia por ano (chunks curtos, retomável)
+                ano_ini = int(os.environ.get("PROGRESS_HIST_ANO_INI", str(datetime.now().year - 2)))
+                ano_fim = datetime.now().year
+                with dw.cursor() as dcur:
+                    dcur.execute(
+                        f"delete from {cfg['raw_table']} where empresa=%s and dt_emis_nota >= %s",
+                        (empresa, f"{ano_ini}-01-01"))
+                dw.commit()
+                tmpl = _sql(cfg["sql"])
+                for ano in range(ano_ini, ano_fim + 1):
+                    sql = (tmpl.replace(":INI", "{d '%d-01-01'}" % ano)
+                               .replace(":FIM", "{d '%d-12-31'}" % ano))
+                    n = _copiar(prog, dw, cfg, empresa, sql)
+                    dw.commit()                       # commit por ano
+                    total += n
+                    print(f"  {base}/{entidade} {ano}: {n} linhas")
+            else:
+                # Fato — incremental (janela móvel de JANELA_DIAS)
+                dias = int(os.environ.get("JANELA_DIAS", "7"))
+                corte = (datetime.now(timezone.utc) - timedelta(days=dias)).strftime("%Y-%m-%d")
+                with dw.cursor() as dcur:
+                    dcur.execute(
+                        f"delete from {cfg['raw_table']} where empresa=%s and dt_emis_nota >= %s",
+                        (empresa, corte))
+                tmpl = _sql(cfg["sql"])
+                sql = (tmpl.replace(":INI", "{d '%s'}" % corte)
+                           .replace(":FIM", "{d '2999-12-31'}"))
+                total = _copiar(prog, dw, cfg, empresa, sql)
+                dw.commit()
         finally:
             prog.close()
 

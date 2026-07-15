@@ -108,15 +108,21 @@ Abra cada arquivo no bloco de notas, copie tudo, cole no editor e clique **Run**
 
 ---
 
-## 6. Primeira carga (histórico completo)
+## 6. Primeira carga (histórico)
 
-Rode em **horário de baixa carga do ERP** (a `it-nota-fisc` tem 1,8M+ notas):
+Rode em **horário de baixa carga do ERP** (madrugada / fim de semana):
 ```cmd
 run_full.bat
 ```
 Ele faz, em ordem: dimensões (naturezas, itens, famílias, clientes, vendedores) →
-classifica/monta as dimensões → extrai o histórico de faturamento → monta
-`mart.vendas` → publica tudo no Supabase. Acompanhe o log na tela.
+classifica/monta as dimensões → extrai o histórico de faturamento (em chunks por
+ano, a partir de `PROGRESS_HIST_ANO_INI`) → monta `mart.vendas` → publica no
+Supabase. Acompanhe o log na tela.
+
+**Proteção da produção (já embutida no código):** a extração roda em **DIRTY READ
+(sem lock)** — nunca bloqueia o faturamento; o fato entra pelo **índice de data do
+cabeçalho** (`nota-fiscal`), sem full scan; e o histórico é lido **ano a ano**
+(transação curta e retomável). Ver seção "Segurança da produção" abaixo.
 
 Se algum passo falhar, ele para e mostra "FALHA - ver stg.etl_log". Veja a seção 9.
 
@@ -178,3 +184,49 @@ tarefa falhar, o carimbo denuncia o atraso.
 
 Qualquer erro que travar, copie a mensagem do `stg.etl_log` (ou da tela) e me
 mande — eu identifico e corrijo.
+
+---
+
+## 10. Segurança da produção (ems2fugini é ERP crítico)
+
+Como a extração foi desenhada para **não onerar a base produtiva nem travar a
+fábrica**:
+
+1. **Leitura sem lock (DIRTY READ).** A conexão JDBC é aberta em
+   `TRANSACTION_READ_UNCOMMITTED` + read-only (`common/db.py`). A extração
+   **não adquire lock de registro nem espera lock de transação** do ERP — zero
+   contenção com o faturamento. É a proteção nº 1.
+2. **Entra por índice, sem full scan.** O filtro de data é no **cabeçalho**
+   (`nota-fiscal`, que tem índice líder por `dt-emis-nota`), com join no item
+   pela PK. Evita varrer as 1,8M linhas de `it-nota-fisc` a cada rodada.
+3. **Histórico em chunks por ano.** A carga cheia lê ano a ano (commit por ano):
+   transações curtas, retomável se cair, e sem cursor aberto por horas.
+   Controlado por `PROGRESS_HIST_ANO_INI` no `.env`.
+4. **`fetchmany`** (5.000 linhas por vez) em vez de puxar tudo de uma vez.
+5. **Janela móvel curta** no dia a dia (7 dias) + reprocesso idempotente.
+
+### Checklist para o DBA / time do ERP (antes de ligar a rotina)
+
+- [ ] **Usuário SQL dedicado só de `SELECT`** nas tabelas usadas — NÃO usar o
+      `sysprogress` (DBA) na rotina; criar um `etl_ro` read-only.
+- [ ] Confirmar em runtime que a sessão do ETL está em **READ UNCOMMITTED**
+      (via VST `_Connect` / log do servidor SQL).
+- [ ] Rodar **EXPLAIN** da query do fato e confirmar que **não há TABLE SCAN**
+      em `it-nota-fisc` (deve entrar por `nota-fiscal` + PK do item).
+- [ ] **Carga histórica só em madrugada/fim de semana**; incremental fora do
+      pico de faturamento.
+- [ ] Durante a 1ª carga, monitorar as VSTs **`_Lock`** (deve ficar mínimo/vazio
+      com dirty read), **`_Connect`**, **`_Trans`**, e I/O (**PROMON** / OE
+      Management).
+- [ ] Ter o **kill de sessão** pronto (identificar o usernum do ETL em `_Connect`
+      e `proshut -C disconnect <usernum>`) caso precise abortar sem derrubar o banco.
+
+### Alternativas de menor risco (se o DBA preferir)
+
+- **Réplica / OpenEdge Replication** (se existir): extrair de um servidor
+  secundário = zero impacto no primário. Ideal, se houver licença.
+- **CSV via job ABL no ERP** (o que a Fugini já faz em `\\192.168.0.226\pdi`):
+  o ERP exporta em horário controlado com `NO-LOCK` e o ETL só lê o arquivo —
+  opção barata e de baixo risco para o incremental diário.
+- **Pro2 (Progress→Postgres)**: replicação oficial para offload de relatório —
+  alvo de médio prazo se o volume/frequência crescer.
