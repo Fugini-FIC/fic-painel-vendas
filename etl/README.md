@@ -48,14 +48,24 @@ saída é sempre push HTTPS.
 - **valor** sempre positivo; o `tipo` carrega o sinal (a função `painel_vendas()`
   faz `case tipo when 'devolucao' then -valor`).
 
+## Fase 2a — CONCLUÍDA (dimensões cliente e vendedor)
+
+Extrai `emitente` e `repres` de **ems2mult** e monta `mart.clientes`
+(canal, limite, **crédito suspenso** via ind-cre-cli=4) e `mart.vendedores`
+(nome real, ativo por dt-deslig, hierarquia rep_indireto). Publica clientes e
+nomes de vendedor no Supabase. Aplicar no Supabase: `db/002_fase2a.sql`.
+
+- [ ] `canal` hoje é o **código** (cod-canal-venda). Mapear para nome
+      (varejo/atacado/...) com uma pequena tabela de-para — melhoria cosmética.
+
 ## Verificar / próximas fases
 
 - [ ] Conferir `un-fatur` da `it-nota-fisc`: se ≠ "CX", ajustar conversão de caixas
       em `transform/build_mart.py` (hoje usa `qt-faturada` direto).
 - [ ] **Faturamento ainda é BRUTO**: devolução DE venda é nota de ENTRADA e não
-      está na `it-nota-fisc` (saídas). Fase 2: extrair a origem das devoluções
-      (docum-est) para o líquido.
-- [ ] Fase 2 — enriquecer `mart.clientes` da `emitente` (nome, CNPJ, **canal**
-      via `cod-canal-venda`, **limite de crédito**) e nomes de vendedor da `repres`.
-- [ ] Empresa Cristal (`ems2cristal`): adicionar coluna `empresa` nas tabelas do
-      Supabase e na chave antes de ligar a segunda empresa.
+      está na `it-nota-fisc` (saídas). Extrair a origem das devoluções (docum-est).
+- [ ] Fase 2b — PEDIDOS (ped-venda/ped-item/ped-repre): carteira em aberto,
+      fill rate/corte, **erosão de preço** (vl-pretab × vl-preuni), hierarquia gerente.
+- [ ] Fase 2c — funil do TABLET (pre_pedido/item_pre_pedido, wdkforms).
+- [ ] Fase 2d — campanhas (campanha_caixa/com + familia_per_item, des2fugini vivo).
+- [ ] Empresa Cristal (`ems2cristal`): adicionar coluna `empresa` no Supabase.

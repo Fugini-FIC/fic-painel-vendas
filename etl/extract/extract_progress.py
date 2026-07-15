@@ -30,6 +30,10 @@ def _conv(valor, coluna, cfg):
             return int(valor)
         except (ValueError, TypeError):
             return None
+    if coluna in cfg.get("bool", set()):
+        if isinstance(valor, bool):
+            return valor
+        return str(valor).strip().lower() in ("1", "true", "yes", "sim", "y", "t")
     return valor
 
 

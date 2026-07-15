@@ -22,9 +22,10 @@ ENTIDADES = {
         "sql": "natur_oper.sql",
         "raw_table": "raw.natur_oper",
         "incremental": False,
-        "colunas": ["nat_operacao", "denominacao", "tipo", "cfop"],
+        "colunas": ["nat_operacao", "denominacao", "tipo", "cfop", "log_bonif"],
         "texto": {"nat_operacao", "denominacao", "cfop"},
         "int": {"tipo"},
+        "bool": {"log_bonif"},
     },
     "item": {
         "sql": "item.sql",
@@ -41,5 +42,26 @@ ENTIDADES = {
         "colunas": ["fm_cod_com", "descricao"],
         "texto": {"fm_cod_com", "descricao"},
         "int": set(),
+    },
+    # --- Fase 2a: dimensões cliente e vendedor (base ems2mult) ---
+    "emitente": {
+        "sql": "emitente.sql",
+        "raw_table": "raw.emitente",
+        "incremental": False,
+        "colunas": ["cod_emitente", "nome_emit", "nome_abrev", "cgc", "cidade", "estado",
+                    "cod_rep", "cod_canal_venda", "lim_credito", "ind_cre_cli",
+                    "ind_sit_emitente", "dt_ult_venda", "identific"],
+        "texto": {"cod_emitente", "nome_emit", "nome_abrev", "cgc", "cidade", "estado",
+                  "cod_rep", "cod_canal_venda"},
+        "int": {"ind_cre_cli", "ind_sit_emitente", "identific"},
+    },
+    "repres": {
+        "sql": "repres.sql",
+        "raw_table": "raw.repres",
+        "incremental": False,
+        "colunas": ["cod_rep", "nome", "nome_abrev", "nome_ab_reg", "rep_indireto",
+                    "dt_deslig", "ind_situacao"],
+        "texto": {"cod_rep", "nome", "nome_abrev", "nome_ab_reg", "rep_indireto"},
+        "int": {"ind_situacao"},
     },
 }

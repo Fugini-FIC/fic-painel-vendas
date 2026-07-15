@@ -4,7 +4,8 @@
 -- tudo (pega naturezas novas automaticamente). Rodar antes do build_mart.
 --
 -- Regras (ordem importa):
---   bonificacao ← BONIFICAÇÃO / DOAÇÃO / BRINDE / AMOSTRA (mesmo com CFOP de venda)
+--   bonificacao ← flag oficial log-natureza-bonif OU denominação
+--                 (BONIFICAÇÃO / DOAÇÃO / BRINDE / AMOSTRA), mesmo com CFOP de venda
 --   devolucao   ← começa com "DEV" e contém "VENDA" (devolução DE venda; abate)
 --   venda       ← saída (tipo=2) com "VENDA" na denominação
 --   ignorar     ← resto (compras, transferências, remessas, retornos, frete...)
@@ -18,7 +19,8 @@ select
   trim(nat_operacao),
   trim(coalesce(cfop, '')),
   case
-    when upper(coalesce(denominacao,'')) like '%BONIFICA%'
+    when log_bonif is true                                     -- flag oficial do Datasul
+      or upper(coalesce(denominacao,'')) like '%BONIFICA%'
       or upper(coalesce(denominacao,'')) like '%AMOSTRA%'
       or upper(coalesce(denominacao,'')) like '%BRINDE%'
       or upper(coalesce(denominacao,'')) like '%DOA%'          -- DOACAO / DOAÇÃO

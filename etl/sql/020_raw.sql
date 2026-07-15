@@ -34,6 +34,7 @@ create table if not exists raw.natur_oper (
   denominacao  text,
   tipo         integer,          -- 1=entrada  2=saída  3=serviço
   cfop         text,
+  log_bonif    boolean,          -- flag oficial Datasul de bonificação
   carregado_em timestamptz not null default now(),
   primary key (empresa, nat_operacao)
 );
@@ -56,4 +57,37 @@ create table if not exists raw.fam_comerc (
   descricao  text,
   carregado_em timestamptz not null default now(),
   primary key (empresa, fm_cod_com)
+);
+
+-- Fase 2a: dimensões cliente e vendedor (origem ems2mult)
+create table if not exists raw.emitente (
+  empresa          text not null,
+  cod_emitente     text not null,
+  nome_emit        text,
+  nome_abrev       text,
+  cgc              text,
+  cidade           text,
+  estado           text,
+  cod_rep          text,
+  cod_canal_venda  text,               -- código do canal de venda
+  lim_credito      numeric(16,2),
+  ind_cre_cli      integer,            -- 4 = crédito suspenso
+  ind_sit_emitente integer,
+  dt_ult_venda     date,
+  identific        integer,            -- 1=cliente 2=fornecedor 3=ambos
+  carregado_em     timestamptz not null default now(),
+  primary key (empresa, cod_emitente)
+);
+
+create table if not exists raw.repres (
+  empresa      text not null,
+  cod_rep      text not null,
+  nome         text,
+  nome_abrev   text,
+  nome_ab_reg  text,
+  rep_indireto text,
+  dt_deslig    date,
+  ind_situacao integer,
+  carregado_em timestamptz not null default now(),
+  primary key (empresa, cod_rep)
 );

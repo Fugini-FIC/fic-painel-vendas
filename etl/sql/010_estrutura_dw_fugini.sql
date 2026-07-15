@@ -76,16 +76,28 @@ create index if not exists idx_mart_vendas_data on mart.vendas(data_emissao);
 create index if not exists idx_mart_vendas_vend on mart.vendas(cod_vendedor, data_emissao);
 
 create table if not exists mart.clientes (
-  empresa        text not null,
-  cod_cliente    text not null,
-  nome           text,
-  cnpj           text,
-  canal          text,
-  cidade         text,
-  uf             text,
-  cod_vendedor   text,
-  limite_credito numeric(14,2) default 0,
+  empresa          text not null,
+  cod_cliente      text not null,
+  nome             text,
+  cnpj             text,
+  canal            text,
+  cidade           text,
+  uf               text,
+  cod_vendedor     text,
+  limite_credito   numeric(14,2) default 0,
+  credito_suspenso boolean default false,   -- ind-cre-cli = 4
+  dt_ult_venda     date,                     -- última venda (recência)
   primary key (empresa, cod_cliente)
+);
+
+create table if not exists mart.vendedores (
+  empresa      text not null,
+  cod_vendedor text not null,
+  nome         text,
+  ativo        boolean default true,        -- dt-deslig nulo
+  rep_indireto text,                         -- hierarquia (rep pai)
+  regiao       text,
+  primary key (empresa, cod_vendedor)
 );
 
 create table if not exists mart.produtos (

@@ -58,6 +58,23 @@ def sincronizar(full: bool) -> None:
             prod = [{"it_codigo": r[0], "descricao": r[1], "familia": r[2]} for r in c.fetchall()]
             _push("produtos", "it_codigo", prod)
 
+            # clientes (carteira: canal, limite, crédito suspenso) — origem TOTVS
+            c.execute(
+                "select cod_cliente, nome, cnpj, canal, cidade, uf, cod_vendedor, "
+                "limite_credito, credito_suspenso from mart.clientes where empresa='fugini'")
+            clientes = [{
+                "cod_cliente": r[0], "nome": r[1], "cnpj": r[2], "canal": r[3],
+                "cidade": r[4], "uf": r[5], "cod_vendedor": r[6],
+                "limite_credito": float(r[7] or 0), "credito_suspenso": bool(r[8]),
+                "origem": "totvs",
+            } for r in c.fetchall()]
+            _push("clientes", "cod_cliente", clientes)
+
+            # vendedores (nomes reais dos representantes p/ o ranking) — role vendedor
+            c.execute("select cod_vendedor, nome from mart.vendedores where empresa='fugini' and ativo")
+            vendedores = [{"cod_vendedor": r[0], "nome": r[1], "role": "vendedor"} for r in c.fetchall()]
+            _push("vendedores", "cod_vendedor", vendedores)
+
             # vendas (janela por data_emissao)
             c.execute(
                 "select nr_nota, nr_pedido, cod_cliente, cod_vendedor, it_codigo, "
@@ -71,8 +88,9 @@ def sincronizar(full: bool) -> None:
             _push("vendas", "nr_nota,it_codigo,cod_cliente", vendas)
             total = len(vendas)
 
-        log_fim(dw, log_id, "OK", total, f"{len(prod)} produtos, {total} vendas (corte {corte})")
-        print(f"[publish] {len(prod)} produtos, {total} vendas publicadas (corte {corte})")
+        msg = f"{len(prod)} produtos, {len(clientes)} clientes, {len(vendedores)} vendedores, {total} vendas (corte {corte})"
+        log_fim(dw, log_id, "OK", total, msg)
+        print(f"[publish] {msg}")
     except Exception as e:
         log_fim(dw, log_id, "ERRO", total, str(e))
         raise

@@ -40,6 +40,7 @@ interface DashData {
   carteira: {
     total: number; ativos: number; inativos: number; nunca_compraram: number
     pct_ativos: number; pct_positivacao: number; limite_credito_total: number
+    suspensos: number; limite_suspenso: number
   }
   esfriando: { cod_cliente: string; nome: string; cod_vendedor: string; dias_sem_compra: number; faturamento_6m: number }[]
   por_canal: { canal: string; qtd: number; pct: number; faturamento: number; caixas: number }[]
@@ -301,6 +302,10 @@ export default function Dash() {
                   sub={`${fmtNum.format(r.clientes_positivados)} positivados / ${fmtNum.format(cart.ativos)} ativos`} />
                 <Tile label="Limite de crédito da carteira" valor={fmtBRL.format(cart.limite_credito_total)} cor={COR.caixas}
                   sub={usoLimite !== null ? `faturamento = ${usoLimite}% do limite` : undefined} />
+                {cart.suspensos > 0 && (
+                  <Tile label="⚠️ Crédito suspenso" valor={fmtNum.format(cart.suspensos)} cor={STATUS.critical}
+                    sub={`${fmtBRL.format(cart.limite_suspenso)} de limite travado`} />
+                )}
               </div>
 
               {/* Clientes esfriando — lista acionável */}
