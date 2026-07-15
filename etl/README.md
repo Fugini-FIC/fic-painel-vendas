@@ -1,9 +1,21 @@
-# ETL — Progress (TOTVS Datasul) → dw_fugini → Supabase → Painel
+# ETL — TOTVS Datasul → dw_fugini → Supabase → Painel
 
-Extrai vendas da base Progress `ems2fugini` (produção), organiza em camadas no
-Postgres interno **dw_fugini** (raw → stg → mart) e publica o mart no Supabase
-`db_FIC_Painel`, de onde o painel lê. A Vercel nunca alcança a rede interna: a
-saída é sempre push HTTPS.
+Alimenta o painel com dados de vendas, organizados em camadas no Postgres
+interno **dw_fugini** (raw → mart) e publicados no Supabase `db_FIC_Painel`.
+A Vercel nunca alcança a rede interna: a saída é sempre push HTTPS.
+
+## Duas fontes de extração
+
+- **CSV (adotado, `run_csv.bat`):** lê os arquivos que o ERP já exporta para
+  `\\192.168.0.226\pdi` (o `.bat` de cópia da Fugini) → `raw_csv.*` →
+  `070_mart_csv.sql`. **ZERO impacto na produção**, dispensa Java/JDBC.
+  Limitação: sem natureza de operação, bonificação não se separa (devolução por
+  valor negativo). Config: `CSV_DIR` no `.env`.
+- **JDBC direto (alternativa, `run_full/incremental.bat`):** lê o Progress
+  `ems2fugini` com proteções (dirty read, índice do cabeçalho, chunk por ano —
+  ver `SETUP-MAQUINA-INTERNA.md`). Só se precisar da natureza (separar bonificação).
+
+Guia completo de execução: **`SETUP-MAQUINA-INTERNA.md`**.
 
 ## Pré-requisitos (uma vez)
 

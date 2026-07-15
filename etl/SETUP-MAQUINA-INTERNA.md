@@ -1,22 +1,34 @@
 # Guia de execução — máquina interna (primeira carga do Painel de Vendas)
 
-Este guia é para a **máquina interna que enxerga o Progress e o `dw_fugini`**
-(a mesma que já roda o ETL do TOTVS / `load_nf.py`, IP `192.168.0.242` na rede).
-A Vercel/Supabase são alcançados por internet (push de saída). Siga na ordem.
+Este guia é para a **máquina interna que enxerga o `dw_fugini`** e a pasta dos
+CSVs (a mesma que já roda o ETL do TOTVS, IP `192.168.0.242`). Vercel/Supabase
+são alcançados por internet (push de saída).
 
-> Tempo estimado: ~30–40 min (a maior parte é a carga histórica das notas).
+## Dois caminhos de extração
+
+- **Caminho A — CSV (RECOMENDADO, adotado):** lê os arquivos que o ERP já
+  exporta para `\\192.168.0.226\pdi` (o `.bat` de cópia da Fugini). **ZERO
+  impacto na produção** e mais simples: dispensa Java, `openedge.jar` e senha do
+  Progress. É o que este guia usa por padrão (seções com **[A]**).
+- **Caminho B — leitura direta do Progress via JDBC (alternativa):** só se
+  precisar de granularidade que o CSV não tem (ex.: natureza de operação para
+  separar bonificação). Exige Java + `openedge.jar` + usuário read-only e as
+  proteções da seção "Segurança da produção". Passos marcados **[B]**.
+
+> Tempo estimado (Caminho A): ~15–20 min.
 
 ---
 
 ## 0. Pré-requisitos (instalar uma vez)
 
-| Item | Como obter / verificar |
-|---|---|
-| **Python 3.10+** | `python --version`. Se faltar: instalar de python.org (marcar "Add to PATH"). |
-| **Java (JRE 8+)** | Necessário para o JDBC do Progress. `java -version`. Pode usar o Java que já vem com a instalação do OpenEdge (`%DLC%\jdk`) ou o do DBeaver. Se `java` não estiver no PATH, definir `JAVA_HOME`. |
-| **openedge.jar** | O MESMO que o DBeaver usa. No DBeaver: *Database → Driver Manager → Progress OpenEdge → Edit → Libraries* mostra o caminho. Ou `%DLC%\java\openedge.jar`. Anote o caminho completo. |
-| **Acesso de rede** | À base Progress (host/porta da conexão do DBeaver), ao `dw_fugini` (`192.168.0.242:5432`) e à internet (Supabase). |
-| **Git** (opcional) | Para clonar/atualizar o repositório. Sem git, dá para baixar o ZIP do GitHub. |
+| Item | Caminho | Como obter / verificar |
+|---|---|---|
+| **Python 3.10+** | A e B | `python --version`. Se faltar: instalar de python.org (marcar "Add to PATH"). |
+| **Acesso de rede** | A e B | Ao `dw_fugini` (`192.168.0.242:5432`) e à internet (Supabase). No Caminho A, também à pasta dos CSVs (`\\192.168.0.226\pdi` / `C:\pdi\in\full`). |
+| **CSV atualizados** | **A** | Rodar o `.bat` da Fugini que copia os CSVs para `C:\pdi\in\full` **antes** da carga. |
+| **Java (JRE 8+)** | B | `java -version`. Java do OpenEdge (`%DLC%\jdk`) ou do DBeaver. Se `java` não estiver no PATH, definir `JAVA_HOME`. |
+| **openedge.jar** | B | O MESMO do DBeaver (*Driver Manager → Progress OpenEdge → Libraries*) ou `%DLC%\java\openedge.jar`. |
+| **Git** (opcional) | A e B | Para clonar/atualizar o repositório (ou baixar o ZIP). |
 
 ---
 
@@ -88,12 +100,18 @@ O `.env` **não vai para o git** (está no `.gitignore`). Guarde as senhas com c
 
 ## 4. Preparar o `dw_fugini` (criar os schemas — uma vez)
 
-Cria as camadas `raw`/`stg`/`mart`, tabelas, `painel_vendas` interno e as dimensões:
+**[A] Caminho CSV:**
+```cmd
+python -m common.run_sql sql\010_estrutura_dw_fugini.sql
+python -m common.run_sql sql\021_raw_csv.sql
+```
+
+**[B] Caminho JDBC (alternativa):**
 ```cmd
 python -m common.run_sql sql\010_estrutura_dw_fugini.sql
 python -m common.run_sql sql\020_raw.sql
 ```
-Se rodar sem erro, o `dw_fugini` está pronto. (Idempotente — pode repetir.)
+Idempotente — pode repetir.
 
 ---
 
@@ -108,21 +126,24 @@ Abra cada arquivo no bloco de notas, copie tudo, cole no editor e clique **Run**
 
 ---
 
-## 6. Primeira carga (histórico)
+## 6. Primeira carga
 
-Rode em **horário de baixa carga do ERP** (madrugada / fim de semana):
+**[A] Caminho CSV (recomendado):** primeiro rode o `.bat` da Fugini que copia
+os CSVs para `C:\pdi\in\full`; depois:
+```cmd
+run_csv.bat
+```
+Ele carrega os CSVs (produto, cliente, nf, pedido) em `raw_csv` → monta
+`mart.produtos/clientes/vendas` → publica no Supabase. Lê arquivos que o ERP já
+exportou: **não toca na produção**. Pode rodar a qualquer hora.
+
+**[B] Caminho JDBC (alternativa):** em **horário de baixa carga** (madrugada):
 ```cmd
 run_full.bat
 ```
-Ele faz, em ordem: dimensões (naturezas, itens, famílias, clientes, vendedores) →
-classifica/monta as dimensões → extrai o histórico de faturamento (em chunks por
-ano, a partir de `PROGRESS_HIST_ANO_INI`) → monta `mart.vendas` → publica no
-Supabase. Acompanhe o log na tela.
-
-**Proteção da produção (já embutida no código):** a extração roda em **DIRTY READ
-(sem lock)** — nunca bloqueia o faturamento; o fato entra pelo **índice de data do
-cabeçalho** (`nota-fiscal`), sem full scan; e o histórico é lido **ano a ano**
-(transação curta e retomável). Ver seção "Segurança da produção" abaixo.
+Extrai direto do Progress com as proteções da seção "Segurança da produção"
+(dirty read, índice do cabeçalho, chunk por ano). Só usar se precisar de
+natureza de operação (separar bonificação).
 
 Se algum passo falhar, ele para e mostra "FALHA - ver stg.etl_log". Veja a seção 9.
 
@@ -158,15 +179,17 @@ apontam natureza mal classificada — me traga o caso que eu ajusto a regra.
 
 Para o painel ficar atualizado sozinho:
 1. Abrir **Agendador de Tarefas** do Windows → *Criar Tarefa Básica*
-2. Nome: `Painel Vendas - Incremental`
-3. Disparador: **Diariamente**, repetir a cada **1 ou 2 horas** em horário comercial
+2. Nome: `Painel Vendas`
+3. Disparador: **Diariamente** (ex.: 1x pela manhã, depois que os CSVs do dia
+   já foram exportados/copiados). Pode repetir a cada algumas horas.
 4. Ação: *Iniciar um programa* → Programa: `cmd.exe` →
-   Argumentos: `/c "C:\Fugini\fic-painel-vendas\etl\run_incremental.bat"`
+   Argumentos **[A]**: `/c "C:\Fugini\fic-painel-vendas\etl\run_csv.bat"`
+   (agende **depois** do `.bat` que copia os CSVs) ·
+   Argumentos **[B]**: `/c "...\run_incremental.bat"`
 5. Marcar "Executar estando o usuário conectado ou não"
 
-O `run_incremental.bat` reprocessa só a janela móvel (últimos `JANELA_DIAS`),
-então é rápido. O painel mostra o carimbo "dados sincronizados até" — se a
-tarefa falhar, o carimbo denuncia o atraso.
+O painel mostra o carimbo "dados sincronizados até" — se a tarefa falhar, o
+carimbo denuncia o atraso.
 
 ---
 
