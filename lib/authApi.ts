@@ -1,34 +1,28 @@
-// lib/authApi.ts — autenticação server-side para as rotas /api
-// Valida o JWT do Supabase enviado em Authorization: Bearer <token>
-// e resolve o vendedor correspondente. O cod_vendedor/role SEMPRE vem
-// daqui — nunca do body/query do cliente.
+// lib/authApi.ts — autenticação das rotas /api do painel interno.
+// Login/identidade: validados no Supabase crm_fugini (mesma base de usuários do
+// app de check-in). Dados do vendedor (cod/role): lidos do dw_fugini (crm.vendedores),
+// sincronizados do crm_fugini. O cod_vendedor/role SEMPRE vem daqui, nunca do body.
 import type { NextApiRequest, NextApiResponse } from 'next'
-import { createClient, SupabaseClient } from '@supabase/supabase-js'
+import { createClient } from '@supabase/supabase-js'
+import { dw } from './dwdb'
+
+const supaAuth = createClient(
+  process.env.SUPABASE_URL!,             // crm_fugini
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { persistSession: false } }
+)
 
 export interface VendedorAuth {
   cod_vendedor: string
   nome: string
-  role: string // 'vendedor' | 'master'
+  role: string        // 'vendedor' | 'master'
   email: string
 }
 
-export function supabaseAdmin(): SupabaseClient {
-  return createClient(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } }
-  )
-}
-
-/**
- * Autentica a requisição. Retorna o vendedor logado ou responde
- * 401/403 e retorna null (o handler deve dar return).
- * @param roles se informado, exige que o role esteja na lista (ex: ['master'])
- */
+/** Valida o token e resolve o vendedor. Responde 401/403 e retorna null se falhar. */
 export async function requireVendedor(
   req: NextApiRequest,
   res: NextApiResponse,
-  admin: SupabaseClient,
   roles?: string[]
 ): Promise<VendedorAuth | null> {
   const auth = req.headers.authorization || ''
@@ -38,27 +32,24 @@ export async function requireVendedor(
     return null
   }
 
-  const { data: { user }, error } = await admin.auth.getUser(token)
+  const { data: { user }, error } = await supaAuth.auth.getUser(token)
   if (error || !user?.email) {
     res.status(401).json({ error: 'Sessão inválida ou expirada' })
     return null
   }
 
-  const { data: vendedor } = await admin
-    .from('vendedores')
-    .select('cod_vendedor, nome, role, email')
-    .eq('email', user.email)
-    .single()
-
+  const r = await dw().query(
+    'select cod_vendedor, nome, role, email from crm.vendedores where email = $1',
+    [user.email]
+  )
+  const vendedor = r.rows[0] as VendedorAuth | undefined
   if (!vendedor) {
     res.status(403).json({ error: 'Usuário sem vendedor vinculado' })
     return null
   }
-
   if (roles && !roles.includes(vendedor.role)) {
     res.status(403).json({ error: 'Acesso restrito ao gestor' })
     return null
   }
-
-  return vendedor as VendedorAuth
+  return vendedor
 }
