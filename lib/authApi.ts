@@ -3,14 +3,8 @@
 // app de check-in). Dados do vendedor (cod/role): lidos do dw_fugini (crm.vendedores),
 // sincronizados do crm_fugini. O cod_vendedor/role SEMPRE vem daqui, nunca do body.
 import type { NextApiRequest, NextApiResponse } from 'next'
-import { createClient } from '@supabase/supabase-js'
 import { dw } from './dwdb'
-
-const supaAuth = createClient(
-  process.env.SUPABASE_URL!,             // crm_fugini
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { persistSession: false } }
-)
+import { crm } from './crmSupabase'
 
 export interface VendedorAuth {
   cod_vendedor: string
@@ -32,7 +26,7 @@ export async function requireVendedor(
     return null
   }
 
-  const { data: { user }, error } = await supaAuth.auth.getUser(token)
+  const { data: { user }, error } = await crm().auth.getUser(token)
   if (error || !user?.email) {
     res.status(401).json({ error: 'Sessão inválida ou expirada' })
     return null
