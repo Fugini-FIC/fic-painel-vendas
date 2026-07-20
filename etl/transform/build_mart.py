@@ -19,28 +19,39 @@ insert into mart.vendas (
   it_codigo, qt_caixas, valor, tipo, familia, data_emissao, carregado_em
 )
 select
-  r.empresa,
-  r.cod_estabel,
-  r.nr_nota_fis,
-  nullif(r.nr_pedcli, ''),
-  r.cd_emitente,
-  coalesce(mv.cod_vendedor, r.cd_vendedor),          -- mapa rep→vendedor; senão o do item
-  r.it_codigo,
-  -- qt_caixas: qt_faturada quando a unidade de faturamento é caixa
-  case when upper(coalesce(r.un_fatur,'')) in ('CX','CXA','CAIXA')
-       then coalesce(r.qt_faturada,0) else coalesce(r.qt_faturada,0) end,
-  abs(coalesce(r.vl_merc_liq,0)),                     -- sempre positivo
+  g.empresa,
+  g.cod_estabel,
+  g.nr_nota_fis,
+  nullif(g.nr_pedcli, ''),
+  g.cd_emitente,
+  coalesce(mv.cod_vendedor, g.cd_vendedor),          -- mapa rep→vendedor; senão o do item
+  g.it_codigo,
+  g.qt_caixas,
+  abs(g.vl_merc_liq),                                 -- sempre positivo
   coalesce(dn.tipo, 'venda'),                         -- natureza não mapeada = venda (com alerta)
   coalesce(p.familia, 'SEM FAMILIA'),
-  r.dt_emis_nota,
+  g.dt_emis_nota,
   now()
-from raw.it_nota_fisc r
-left join stg.dim_natureza dn on dn.empresa = r.empresa and dn.nat_operacao = r.nat_operacao
-left join stg.map_vendedor mv on mv.empresa = r.empresa and mv.cod_rep = coalesce(r.cd_vendedor,'')
-left join mart.produtos    p  on p.empresa  = r.empresa and p.it_codigo  = r.it_codigo
-where r.dt_cancela is null                            -- exclui notas canceladas
-  and coalesce(dn.tipo, 'venda') <> 'ignorar'         -- exclui transferências/remessas
-  and r.dt_emis_nota >= %(corte)s
+from (
+  -- Mesmo item pode aparecer em vários nr-seq-fat na mesma nota (lotes /
+  -- entregas parciais) — soma antes do upsert p/ não colidir na chave.
+  select
+    empresa, cod_estabel, nr_nota_fis, it_codigo, cd_emitente,
+    max(nat_operacao) as nat_operacao,
+    max(cd_vendedor)  as cd_vendedor,
+    max(nr_pedcli)    as nr_pedcli,
+    max(dt_emis_nota) as dt_emis_nota,
+    sum(coalesce(qt_faturada,0)) as qt_caixas,
+    sum(coalesce(vl_merc_liq,0)) as vl_merc_liq
+  from raw.it_nota_fisc
+  where dt_cancela is null                            -- exclui notas canceladas
+    and dt_emis_nota >= %(corte)s
+  group by empresa, cod_estabel, nr_nota_fis, it_codigo, cd_emitente
+) g
+left join stg.dim_natureza dn on dn.empresa = g.empresa and dn.nat_operacao = g.nat_operacao
+left join stg.map_vendedor mv on mv.empresa = g.empresa and mv.cod_rep = coalesce(g.cd_vendedor,'')
+left join mart.produtos    p  on p.empresa  = g.empresa and p.it_codigo  = g.it_codigo
+where coalesce(dn.tipo, 'venda') <> 'ignorar'         -- exclui transferências/remessas
 on conflict (empresa, nr_nota, it_codigo, cod_cliente) do update set
   estabel      = excluded.estabel,
   nr_pedido    = excluded.nr_pedido,
