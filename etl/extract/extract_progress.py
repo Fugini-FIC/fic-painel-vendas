@@ -17,6 +17,7 @@ import os
 import sys
 import argparse
 from datetime import datetime, timedelta, timezone
+from psycopg2.extras import execute_values
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from common.db import conectar_progress, conectar_dw
@@ -56,11 +57,16 @@ def _sql(nome: str) -> str:
 
 
 def _copiar(prog, dw, cfg, empresa: str, sql: str) -> int:
-    """Executa o SELECT no Progress e insere na raw em lotes (fetchmany)."""
+    """Executa o SELECT no Progress e insere na raw em lotes (fetchmany).
+
+    Usa execute_values (1 INSERT multi-linha por lote) em vez de executemany
+    (que manda uma linha por vez) — para tabelas dimensao grandes (ex.:
+    emitente, ~75 mil linhas) executemany levava minutos; execute_values
+    leva segundos.
+    """
     colunas = cfg["colunas"]
     cols_sql = ",".join(["empresa"] + colunas)
-    ph = ",".join(["%s"] * (len(colunas) + 1))
-    insert = f"insert into {cfg['raw_table']} ({cols_sql}) values ({ph}) on conflict do nothing"
+    insert = f"insert into {cfg['raw_table']} ({cols_sql}) values %s on conflict do nothing"
 
     cur = prog.cursor()
     try:
@@ -79,7 +85,7 @@ def _copiar(prog, dw, cfg, empresa: str, sql: str) -> int:
             for row in rows:
                 d = dict(zip(desc, row))
                 lote.append(tuple([empresa] + [_conv(d.get(c), c, cfg) for c in colunas]))
-            dcur.executemany(insert, lote)
+            execute_values(dcur, insert, lote, page_size=FETCH)
             total += len(lote)
     return total
 
