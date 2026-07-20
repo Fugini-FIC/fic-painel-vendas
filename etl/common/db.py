@@ -7,10 +7,34 @@ from dotenv import load_dotenv
 # No Caminho A (CSV) não precisa de Java/JDBC — import opcional.
 try:
     import jaydebeapi
+    import jpype
 except ImportError:  # pragma: no cover
     jaydebeapi = None
+    jpype = None
 
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", "config", ".env"))
+
+
+def _iniciar_jvm(jar: str) -> None:
+    """Inicia a JVM explicitamente via JAVA_HOME antes do jaydebeapi conectar.
+
+    No Windows, jpype.getDefaultJVMPath() pode pegar um Java antigo registrado
+    no sistema (ex.: o Java 8 que vem com o proprio Progress) mesmo com
+    JAVA_HOME apontando pra uma versao mais nova — e o driver JDBC do Progress
+    exige Java 9+. Resolver o caminho manualmente evita o erro
+    "Java version too old" quando ha mais de um Java instalado na maquina.
+    """
+    if jpype.isJVMStarted():
+        return
+    jvm_path = None
+    java_home = os.environ.get("JAVA_HOME")
+    if java_home:
+        candidato = os.path.join(java_home, "bin", "server", "jvm.dll")
+        if os.path.isfile(candidato):
+            jvm_path = candidato
+    if jvm_path is None:
+        jvm_path = jpype.getDefaultJVMPath()
+    jpype.startJVM(jvm_path, f"-Djava.class.path={jar}", ignoreUnrecognized=True, convertStrings=True)
 
 
 def conectar_progress(dbname: str):
@@ -26,6 +50,7 @@ def conectar_progress(dbname: str):
             "jaydebeapi não instalado. O Caminho A (CSV) não precisa dele. "
             "Para o Caminho B (JDBC): pip install jaydebeapi JPype1 (requer Java)."
         )
+    _iniciar_jvm(os.environ["PROGRESS_JDBC_JAR"])
     host = os.environ["PROGRESS_HOST"]
     # Cada base Progress tem seu próprio broker/porta e credenciais (não é
     # multiplexado por databaseName num único broker) — ex.: ems2fugini:24649,
