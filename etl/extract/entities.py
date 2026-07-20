@@ -17,6 +17,9 @@ ENTIDADES = {
         "texto": {"cod_estabel", "serie", "nr_nota_fis", "it_codigo", "nat_operacao",
                   "un_fatur", "cd_emitente", "cd_vendedor", "nome_ab_cli", "nr_pedcli"},
         "int": {"nr_seq_fat", "ind_sit_nota"},
+        # EXTENT(2) no Progress: driver retorna "valor;valor" (os 2 elementos
+        # sempre iguais, confirmado em amostra) — usar só o 1º elemento.
+        "extent_decimal": {"qt_faturada", "qt_devolvida"},
     },
     "natur_oper": {
         "sql": "natur_oper.sql",

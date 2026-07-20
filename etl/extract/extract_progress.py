@@ -41,6 +41,13 @@ def _conv(valor, coluna, cfg):
         if isinstance(valor, bool):
             return valor
         return str(valor).strip().lower() in ("1", "true", "yes", "sim", "y", "t")
+    if coluna in cfg.get("extent_decimal", set()):
+        # EXTENT(2) do Progress vem como "valor;valor" (string) — 1º elemento.
+        texto = valor.split(";")[0] if isinstance(valor, str) else valor
+        try:
+            return float(texto)
+        except (ValueError, TypeError):
+            return None
     return valor
 
 

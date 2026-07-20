@@ -27,12 +27,18 @@ def conectar_progress(dbname: str):
             "Para o Caminho B (JDBC): pip install jaydebeapi JPype1 (requer Java)."
         )
     host = os.environ["PROGRESS_HOST"]
-    port = os.environ["PROGRESS_PORT"]
+    # Cada base Progress tem seu próprio broker/porta e credenciais (não é
+    # multiplexado por databaseName num único broker) — ex.: ems2fugini:24649,
+    # ems2mult:24613, cada uma com usuário/senha próprios.
+    sufixo = dbname.upper()
+    port = os.environ.get(f"PROGRESS_PORT_{sufixo}") or os.environ["PROGRESS_PORT"]
+    user = os.environ.get(f"PROGRESS_USER_{sufixo}") or os.environ["PROGRESS_USER"]
+    senha = os.environ.get(f"PROGRESS_PASSWORD_{sufixo}") or os.environ["PROGRESS_PASSWORD"]
     url = f"jdbc:datadirect:openedge://{host}:{port};databaseName={dbname}"
     conn = jaydebeapi.connect(
         "com.ddtek.jdbc.openedge.OpenEdgeDriver",
         url,
-        [os.environ["PROGRESS_USER"], os.environ["PROGRESS_PASSWORD"]],
+        [user, senha],
         os.environ["PROGRESS_JDBC_JAR"],
     )
     try:
