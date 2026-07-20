@@ -1,5 +1,5 @@
 @echo off
-REM Carga incremental (janela movel) Progress -> dw_fugini -> Supabase
+REM Carga incremental (janela movel) Progress -> dw_fugini (painel le direto daqui)
 REM Agendar no Task Scheduler a cada 1-2h em horario comercial.
 cd /d "%~dp0"
 
@@ -33,11 +33,11 @@ echo [%date% %time%] Montando mart.vendas...
 python -m transform.build_mart --empresa fugini
 if errorlevel 1 goto erro
 
-echo [%date% %time%] Publicando no Supabase...
-python -m publish.sync_painel_supabase
+echo [%date% %time%] Sincronizando check-ins do app de campo (Supabase crm_fugini)...
+python sync_checkins_crm.py
 if errorlevel 1 goto erro
 
-echo [%date% %time%] OK
+echo [%date% %time%] OK — dados no dw_fugini (painel le direto daqui)
 exit /b 0
 
 :erro
