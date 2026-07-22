@@ -191,6 +191,8 @@ export default function Dash() {
               color: '#1a1a2e', textDecoration: 'none', marginBottom: 0 }}>➕ Clientes</a>
             <a href="/checkins" style={{ ...cardStyle, padding: '10px 14px', fontSize: 13, fontWeight: 600,
               color: '#1a1a2e', textDecoration: 'none', marginBottom: 0 }}>📍 Check-ins</a>
+            <a href="/piloto" style={{ ...cardStyle, padding: '10px 14px', fontSize: 13, fontWeight: 600,
+              color: '#1a1a2e', textDecoration: 'none', marginBottom: 0 }}>🧪 Piloto</a>
           </div>
 
           {erro && (
