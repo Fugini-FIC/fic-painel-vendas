@@ -106,11 +106,12 @@ def extrair(empresa: str, base: str, entidade: str, full: bool) -> None:
                 dw.commit()
             elif full:
                 # Fato — carga cheia por ano (chunks curtos, retomável)
+                data_col = cfg.get("data_col", "dt_emis_nota")
                 ano_ini = int(os.environ.get("PROGRESS_HIST_ANO_INI", str(datetime.now().year - 2)))
                 ano_fim = datetime.now().year
                 with dw.cursor() as dcur:
                     dcur.execute(
-                        f"delete from {cfg['raw_table']} where empresa=%s and dt_emis_nota >= %s",
+                        f"delete from {cfg['raw_table']} where empresa=%s and {data_col} >= %s",
                         (empresa, f"{ano_ini}-01-01"))
                 dw.commit()
                 tmpl = _sql(cfg["sql"])
@@ -123,11 +124,12 @@ def extrair(empresa: str, base: str, entidade: str, full: bool) -> None:
                     print(f"  {base}/{entidade} {ano}: {n} linhas")
             else:
                 # Fato — incremental (janela móvel de JANELA_DIAS)
+                data_col = cfg.get("data_col", "dt_emis_nota")
                 dias = int(os.environ.get("JANELA_DIAS", "7"))
                 corte = (datetime.now(timezone.utc) - timedelta(days=dias)).strftime("%Y-%m-%d")
                 with dw.cursor() as dcur:
                     dcur.execute(
-                        f"delete from {cfg['raw_table']} where empresa=%s and dt_emis_nota >= %s",
+                        f"delete from {cfg['raw_table']} where empresa=%s and {data_col} >= %s",
                         (empresa, corte))
                 tmpl = _sql(cfg["sql"])
                 sql = (tmpl.replace(":INI", "{d '%s'}" % corte)

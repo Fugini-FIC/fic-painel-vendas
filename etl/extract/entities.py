@@ -7,6 +7,7 @@ ENTIDADES = {
         "sql": "it_nota_fisc.sql",
         "raw_table": "raw.it_nota_fisc",
         "incremental": True,
+        "data_col": "dt_emis_nota",  # coluna usada no delete da janela incremental
         "colunas": [
             "cod_estabel", "serie", "nr_nota_fis", "nr_seq_fat", "it_codigo",
             "nat_operacao", "qt_faturada", "un_fatur", "vl_merc_liq", "vl_tot_item",
@@ -66,5 +67,30 @@ ENTIDADES = {
                     "dt_deslig", "ind_situacao"],
         "texto": {"cod_rep", "nome", "nome_abrev", "nome_ab_reg", "rep_indireto"},
         "int": {"ind_situacao"},
+    },
+    # --- Piloto: 5 vendedores (6003-6007) — pedidos e cadastros ---
+    "pedidos": {
+        "sql": "pedidos.sql",
+        "raw_table": "raw.pedidos",
+        "incremental": True,
+        "data_col": "dt_venda",
+        "colunas": ["nome_abrev", "nr_pedcli", "cod_emitente", "nr_sequencia", "it_codigo",
+                    "descricao_1", "descricao_2", "qt_pedida", "preco_venda", "valor_total_venda",
+                    "dt_venda", "representante", "situacao_pedido"],
+        "texto": {"nome_abrev", "nr_pedcli", "cod_emitente", "it_codigo",
+                  "descricao_1", "descricao_2", "representante"},
+        "int": {"nr_sequencia", "situacao_pedido"},
+    },
+    "cadastros": {
+        "sql": "cadastros.sql",
+        "raw_table": "raw.cadastros",
+        "incremental": False,
+        "colunas": ["tmp_emitente", "cod_emitente", "nome_emit", "cidade", "estado", "cgc_cpf",
+                    "telefone", "email", "cod_rep", "nome_abrev", "id_status", "desc_status",
+                    "canal_distribuicao", "dt_implantacao", "dt_impl_web", "dt_efetiva_coml",
+                    "lim_credito", "vlr_credito_sugerido"],
+        "texto": {"cod_emitente", "nome_emit", "cidade", "estado", "cgc_cpf", "telefone",
+                  "email", "cod_rep", "nome_abrev", "desc_status", "canal_distribuicao"},
+        "int": {"tmp_emitente", "id_status"},
     },
 }

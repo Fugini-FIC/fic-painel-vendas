@@ -91,3 +91,54 @@ create table if not exists raw.repres (
   carregado_em timestamptz not null default now(),
   primary key (empresa, cod_rep)
 );
+
+-- Piloto: pedidos (ped-venda + ped-item) e cadastros (wt_cliente_repres),
+-- hard-scoped nos 5 vendedores 6003-6007 (ver etl/sql/extract/pedidos.sql
+-- e cadastros.sql).
+create table if not exists raw.pedidos (
+  empresa            text not null,
+  nome_abrev         text not null,
+  nr_pedcli          text not null,
+  cod_emitente       text,
+  nr_sequencia       integer not null,
+  it_codigo          text,
+  descricao_1        text,
+  descricao_2        text,
+  qt_pedida          numeric(16,4),
+  preco_venda        numeric(16,4),
+  valor_total_venda  numeric(16,4),
+  dt_venda           date,
+  representante      text,
+  situacao_pedido    integer,
+  carregado_em       timestamptz not null default now(),
+  primary key (empresa, nome_abrev, nr_pedcli, nr_sequencia)
+);
+create index if not exists idx_raw_pedidos_dt on raw.pedidos(dt_venda);
+
+-- Sem chave natural confiavel: wt_cliente_repres e' uma fila de submissoes
+-- (cod_emitente e tmp_emitente ficam em 0 pra cadastros recem-enviados, e ha
+-- duplicatas reais de app). Usa id substituto e preserva o bruto como veio.
+create table if not exists raw.cadastros (
+  id                    bigserial primary key,
+  empresa               text not null,
+  tmp_emitente          bigint,
+  cod_emitente          text,
+  nome_emit             text,
+  cidade                text,
+  estado                text,
+  cgc_cpf               text,
+  telefone              text,
+  email                 text,
+  cod_rep               text,
+  nome_abrev            text,
+  id_status             integer,
+  desc_status           text,
+  canal_distribuicao    text,
+  dt_implantacao        date,
+  dt_impl_web           date,
+  dt_efetiva_coml       date,
+  lim_credito           numeric(16,2),
+  vlr_credito_sugerido  numeric(16,2),
+  carregado_em          timestamptz not null default now()
+);
+create index if not exists idx_raw_cadastros_rep on raw.cadastros(cod_rep);
