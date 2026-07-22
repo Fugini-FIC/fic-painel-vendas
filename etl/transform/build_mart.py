@@ -24,7 +24,7 @@ select
   g.nr_nota_fis,
   nullif(g.nr_pedcli, ''),
   g.cd_emitente,
-  coalesce(mv.cod_vendedor, g.cd_vendedor),          -- mapa rep→vendedor; senão o do item
+  coalesce(c.cod_vendedor, mv.cod_vendedor, g.cd_vendedor), -- vendedor do cliente (emitente.cod-rep); it-nota-fisc.cd-vendedor vem sempre vazio
   g.it_codigo,
   g.qt_caixas,
   abs(g.vl_merc_liq),                                 -- sempre positivo
@@ -49,6 +49,7 @@ from (
   group by empresa, cod_estabel, nr_nota_fis, it_codigo, cd_emitente
 ) g
 left join stg.dim_natureza dn on dn.empresa = g.empresa and dn.nat_operacao = g.nat_operacao
+left join mart.clientes    c  on c.empresa  = g.empresa and c.cod_cliente = g.cd_emitente
 left join stg.map_vendedor mv on mv.empresa = g.empresa and mv.cod_rep = coalesce(g.cd_vendedor,'')
 left join mart.produtos    p  on p.empresa  = g.empresa and p.it_codigo  = g.it_codigo
 where coalesce(dn.tipo, 'venda') <> 'ignorar'         -- exclui transferências/remessas
